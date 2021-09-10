@@ -1,0 +1,175 @@
+#include <iostream>
+#include <fstream>
+#include <map>
+#include <iomanip>
+#include <string>
+
+using namespace std;
+
+namespace Vape
+{
+    const double nicotineStrength = 100;                            //in mg/mL
+    bool nicVG = 1;                                                 //If true, nicotine diluted with VG, else, nicotine diluted with PG
+
+    class Recipe
+    {
+    public:
+        Recipe(string n, double nic, double botSize, double pgRat=.2)
+        : name(n),
+          flavors(),
+          nicotine(nic),
+          bottleSize(botSize),
+          pgRatio(pgRat)
+        {}
+
+        void addFlavor(string name, double mL);                 //Add a flavor to the list.
+        void removeFlavor(string name);                         //Remove a flavor, will balance out vg and pg.
+        void adjustFlavor(string name, double amount);          //Change amount of flavor
+        void balanceFlavors(double percentDilution);            //10-15% dilution is good.
+
+
+        void adjustBottleSize(double botSize);                  //Adjust flavors proportionally.
+        void adjustNicotine(double nic);
+        void adjustPGRatio(double pg);
+
+
+        double PG();
+        double VG();
+        double neededNicotine()     { return (nicotine*bottleSize)/nicotineStrength; }
+
+
+        void SaveRecipe();                                      //Saves recipe to file of same name.
+        void LoadRecipe();                                      //Loads recipe from file of same name.
+        void addNote(string note);                              //Add a new note to recipe.
+
+
+        string Name() const         { return name; }
+        double Nicotine() const     { return nicotine; }
+        double BottleSize() const   { return bottleSize; }
+        string Notes() const        { return notes; }
+        double PgRatio() const      { return pgRatio; }
+
+
+        double flavor(string name) { return flavors[name]; }
+        map<string, double>& flavorList() { return flavors; }
+
+    private:
+        string name;                                            //Name of the recipe.
+        map<string, double> flavors;                            //List of flavors, and amount of each in mL
+        double nicotine;                                        //Amount of nicotine per mL of juice.
+        double bottleSize;                                      //Total size of bottle.
+        string notes;                                           //Misc. notes on flavor. Steep time, etc.
+        double pgRatio;
+
+        double flavorSum();
+    };
+};
+
+
+void printRecipe(Vape::Recipe& recipe)
+{
+    cout << "***" << recipe.Name() << "***\n";
+    cout << "Strength: " << recipe.Nicotine() << " mg/mL\n";
+    cout << "VG/PG ratio: " << (1-recipe.PgRatio())*100 << "/" << recipe.PgRatio()*100 << endl;
+    cout << "\n***RECIPE***\n";
+    cout << fixed << setprecision(2);
+    for (auto x = recipe.flavorList().begin(); x != recipe.flavorList().end(); x++)
+    {
+        cout << x->first << ": " << x->second << " mL\n";
+    }
+    cout << "Nicotine (100 mg/mL 100% "+string(Vape::nicVG?"VG): ":"PG): ") << recipe.neededNicotine() << " mL\n";
+    cout << "VG diluent: " << recipe.VG() << " mL\n";
+    cout << "PG diluent: " << recipe.PG() << " mL\n";
+    cout << "\n***NOTES***\n" << recipe.Notes() << endl;
+}
+
+int main()
+{
+    //Vape::nicVG = false;
+
+    Vape::Recipe test("Strawberry Cheesecake", 3, 50, .2);
+    test.addFlavor("Cheesecake", 1);                        //1 part cheesecake
+    test.addFlavor("Strawberry", 1);
+    test.addFlavor("Bavarian Cream", 0.5);
+    test.balanceFlavors(0.1);                              //Make sure flavors add up to 10% of the bottle size.
+    test.addNote("Cures the common cold.");
+
+    printRecipe(test);
+
+
+    return 0;
+}
+
+void Vape::Recipe::addFlavor(string name, double mL)
+{
+    flavors[name] = mL;
+}
+
+void Vape::Recipe::removeFlavor(string name)
+{
+    if (flavors.find(name) != flavors.end())
+        flavors.erase(name);
+    else throw(string("Flavor " + name + " doesn't exist."));
+}
+
+void Vape::Recipe::adjustFlavor(string name, double amount)
+{
+    if (flavors.find(name) != flavors.end())
+        flavors[name] = amount;
+    else throw(string("Flavor " + name + " doesn't exist."));
+}
+
+double Vape::Recipe::flavorSum()
+{
+    double sum = 0;
+    for(auto x = flavors.begin(); x != flavors.end(); x++)
+    {
+        sum+=x->second;
+    }
+    return sum;
+}
+
+void Vape::Recipe::balanceFlavors(double percentDilution)
+{
+    double sum = flavorSum();
+    for(auto x = flavors.begin(); x != flavors.end(); x++)
+    {
+        x->second = (x->second/sum)*(bottleSize*percentDilution);
+    }
+}
+
+void Vape::Recipe::adjustBottleSize(double botSize)
+{
+    for(auto x = flavors.begin(); x != flavors.end(); x++)
+        x->second = (x->second/bottleSize)*botSize;
+    bottleSize = botSize;
+}
+
+void Vape::Recipe::adjustNicotine(double nic)
+{
+    nicotine = nic;
+}
+
+void Vape::Recipe::adjustPGRatio(double pg)
+{
+    pgRatio = pg;
+}
+
+void Vape::Recipe::addNote(string note)
+{
+    notes += note + "\n";
+}
+
+double Vape::Recipe::PG()
+{
+    if(!nicVG)
+        return (pgRatio-((flavorSum()+neededNicotine())/bottleSize))*bottleSize;
+    return (pgRatio-(flavorSum()/bottleSize))*bottleSize;
+}
+
+double Vape::Recipe::VG()
+{
+    if(nicVG)
+        return ((1-pgRatio)-((neededNicotine())/bottleSize))*bottleSize;
+    return bottleSize-PG();
+}
